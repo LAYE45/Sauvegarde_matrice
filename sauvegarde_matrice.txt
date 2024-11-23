@@ -1,0 +1,141 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <time.h>
+
+// Génère une matrice carrée aléatoire
+void genererMatrice(int **matrice, int taille) {
+    srand(time(NULL));
+    for (int i = 0; i < taille; i++) {
+        for (int j = 0; j < taille; j++) {
+            matrice[i][j] = rand() % 10; // Valeurs entre 0 et 9
+        }
+    }
+}
+
+// Enregistre la matrice en mode binaire avec des appels système
+void enregistrerMatriceBinaire(const char *nomFichier, int **matrice, int taille) {
+    int fd = open(nomFichier, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1) {
+        perror("Erreur lors de l'ouverture du fichier binaire");
+        exit(EXIT_FAILURE);
+    }
+
+    // Écrit la dimension de la matrice
+    if (write(fd, &taille, sizeof(int)) != sizeof(int)) {
+        perror("Erreur lors de l'écriture de la dimension");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Écrit les valeurs de la matrice
+    for (int i = 0; i < taille; i++) {
+        if (write(fd, matrice[i], taille * sizeof(int)) != taille * sizeof(int)) {
+            perror("Erreur lors de l'écriture des données");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    close(fd);
+}
+
+// Lit une matrice depuis un fichier binaire
+void lireMatriceBinaire(const char *nomFichier) {
+    int fd = open(nomFichier, O_RDONLY);
+    if (fd == -1) {
+        perror("Erreur lors de l'ouverture du fichier binaire");
+        exit(EXIT_FAILURE);
+    }
+
+    int taille;
+    if (read(fd, &taille, sizeof(int)) != sizeof(int)) {
+        perror("Erreur lors de la lecture de la dimension");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    int **matrice = (int **)malloc(taille * sizeof(int *));
+    for (int i = 0; i < taille; i++) {
+        matrice[i] = (int *)malloc(taille * sizeof(int));
+        if (read(fd, matrice[i], taille * sizeof(int)) != taille * sizeof(int)) {
+            perror("Erreur lors de la lecture des données");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    printf("Matrice lue depuis le fichier binaire (%dx%d) :\n", taille, taille);
+    for (int i = 0; i < taille; i++) {
+        for (int j = 0; j < taille; j++) {
+            printf("%d ", matrice[i][j]);
+        }
+        printf("\n");
+        free(matrice[i]);
+    }
+    free(matrice);
+
+    close(fd);
+}
+
+void afficherUsage(const char *programme) {
+    printf("Usage : %s -c|-a -d <dimension> -f <nomFichier>\n", programme);
+    printf("Options :\n");
+    printf("  -c : Créer une matrice aléatoire\n");
+    printf("  -a : Lire une matrice depuis un fichier\n");
+    printf("  -d <dimension> : Dimension de la matrice carrée\n");
+    printf("  -f <nomFichier> : Nom du fichier à utiliser\n");
+}
+
+int main(int argc, char *argv[]) {
+    int opt, taille = 0, creer = 0, afficher = 0;
+    char *nomFichier = NULL;
+
+    // Lecture des options en ligne de commande
+    while ((opt = getopt(argc, argv, "cad:f:")) != -1) {
+        switch (opt) {
+            case 'c':
+                creer = 1;
+                break;
+            case 'a':
+                afficher = 1;
+                break;
+            case 'd':
+                taille = atoi(optarg);
+                break;
+            case 'f':
+                nomFichier = optarg;
+                break;
+            default:
+                afficherUsage(argv[0]);
+                return EXIT_FAILURE;
+        }
+    }
+
+    if ((creer && afficher) || (!creer && !afficher) || taille <= 0 || nomFichier == NULL) {
+        afficherUsage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (creer) {
+        int **matrice = (int **)malloc(taille * sizeof(int *));
+        for (int i = 0; i < taille; i++) {
+            matrice[i] = (int *)malloc(taille * sizeof(int));
+        }
+
+        genererMatrice(matrice, taille);
+        enregistrerMatriceBinaire(nomFichier, matrice, taille);
+        printf("Matrice générée et enregistrée dans %s\n", nomFichier);
+
+        for (int i = 0; i < taille; i++) {
+            free(matrice[i]);
+        }
+        free(matrice);
+    } else if (afficher) {
+        lireMatriceBinaire(nomFichier);
+    }
+
+    return EXIT_SUCCESS;
+}
